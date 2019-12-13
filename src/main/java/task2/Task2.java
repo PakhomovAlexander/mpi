@@ -9,7 +9,7 @@ public class Task2 {
 
         int rank = MPI.COMM_WORLD.Rank();
         double a = -0.9, b = 0.8;
-        double[] eps = new double[]{0.0000000001};
+        double[] eps = new double[]{0.0000000000001};
         int n = 10;
         int k = MPI.COMM_WORLD.Size();
         int count = (int) Math.ceil(n * 1.0 / k);
@@ -28,7 +28,6 @@ public class Task2 {
     private static void slaveProcess(int count, int xSize) {
         double[] x = new double[xSize];
         double[] epsReceived = new double[1];
-        MPI.COMM_WORLD.Bcast(x, 0, count, MPI.DOUBLE, 0);
 
         double[] xReceived = new double[xSize];
         MPI.COMM_WORLD.Scatter(x, 0, count, MPI.DOUBLE, xReceived, 0, count, MPI.DOUBLE, 0);
@@ -44,7 +43,6 @@ public class Task2 {
         double[] xReceived = new double[xSize];
         double[] x = getX(a, b, n, k, count);
 
-        MPI.COMM_WORLD.Bcast(x, 0, count, MPI.DOUBLE, 0);
         MPI.COMM_WORLD.Scatter(x, 0, count, MPI.DOUBLE, xReceived, 0, count, MPI.DOUBLE, 0);
         MPI.COMM_WORLD.Bcast(eps, 0, 1, MPI.DOUBLE, 0);
 
