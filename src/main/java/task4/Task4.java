@@ -18,7 +18,7 @@ public class Task4 {
         int rank = MPI.COMM_WORLD.Rank();
 
         //minimum 4
-        int size = 10;
+        int size = 5;
         int elemsCount = size * 3 + (size - 3) * 2;
 
         int[] array = new int[size * size];

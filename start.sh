@@ -1,5 +1,4 @@
 export MPJ_HOME=lib/mpj-v0_44
 export PATH=$MPJ_HOME/bin:$PATH
 
-#mpjrun.sh -np 4 -cp build/classes/java/main task2.Task2
-mpjrun.sh -np 2 -cp build/classes/java/main task4.Task4
+mpjrun.sh -np 10 -cp build/classes/java/main task5.Task5
