@@ -5,99 +5,119 @@ import mpi.Cartcomm;
 import mpi.MPI;
 import mpi.ShiftParms;
 
-//9
+import java.util.Arrays;
+import java.util.Random;
+
+import static java.lang.String.format;
+
+//18
 public class Task5 {
+    static final Random random = new Random();
+
     static final int NUM_DIMS = 1;
-    static final int[] dims;
-    static final boolean[] periods;
-    static final int NUMBER = 10;
+    static final int NUMBER = 5;
 
-    static {
-        dims = new int[NUM_DIMS];
-        periods = new boolean[NUM_DIMS];
-        for (int i = 0; i < NUM_DIMS; i++) {
-            dims[i] = 0;
-            periods[i] = true;
-        }
-    }
+    static final int[] dims = new int[NUM_DIMS];
+    static final boolean[] periods = initBoolArray();
 
 
-    //min(j)max(k)(a(ik)+b(ki))
+    //max(j)max(k)(a(ik)*b(jk))
     public static void main(String[] args) {
         MPI.Init(args);
+
         int rank = MPI.COMM_WORLD.Rank();
         int size = MPI.COMM_WORLD.Size();
 
-        //ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ñ€Ð°Ð·Ð¼ÐµÑ€ Ð¾Ð´Ð½Ð¾Ð¼ÐµÑ€Ð½Ð¾Ð¹ Ñ€ÐµÑˆÐµÑ‚ÐºÐ¸ <=> dims = {size}
+        // Create topology
         Cartcomm.Dims_create(size, dims);
+        Cartcomm cartComm = MPI.COMM_WORLD.Create_cart(dims, periods, false);
+        ShiftParms sourceDest = cartComm.Shift(0, -1);
 
-        //ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ Ð½Ð¾Ð²ÑƒÑŽ Ñ‚Ð¾Ð¿Ð¾Ð»Ð¾Ð³Ð¸ÑŽ
-        Cartcomm cart_comm = MPI.COMM_WORLD.Create_cart(dims, periods, false);
+        int[] a = initRandArray(size);
+        printRow(format("[%s] A: ", rank), a);
+        int[] b = initRandArray(size);
+        printRow(format("[%s] B: ", rank), b);
 
-        //ÐžÐ¿Ñ€ÐµÐ´ÐµÐ»ÑÐµÐ¼ ÑÐ¾ÑÐµÐ´ÐµÐ¹
-        ShiftParms source_dest = cart_comm.Shift(0, -1);
-
-        int[] a = new int[size];
-        int[] b = new int[size];
-        for (int i = 0; i < size; i++) {
-            a[i] = (int) (Math.random() * NUMBER);
-            b[i] = (int) (Math.random() * NUMBER);
-        }
-
-        //ÐÑƒÐ»ÐµÐ²Ð¾Ð¹ Ð¿Ñ€Ð¾Ñ†ÐµÑÑ Ð²Ñ‹Ð²Ð¾Ð´Ð¸Ñ‚ ÑÐ³ÐµÐ½ÐµÑ€Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð½Ñ‹Ðµ Ð¼Ð°Ñ‚Ñ€Ð¸Ñ†Ñ‹
-        int[] recvbufA = new int[size * size];
-        int[] recvbufB = new int[size * size];
-        cart_comm.Gather(a, 0, size, MPI.INT, recvbufA, 0, size, MPI.INT, 0);
-        cart_comm.Gather(b, 0, size, MPI.INT, recvbufB, 0, size, MPI.INT, 0);
+        int[] recvA = new int[size * size];
+        int[] recvB = new int[size * size];
+        cartComm.Gather(a, 0, size, MPI.INT, recvA, 0, size, MPI.INT, 0);
+        cartComm.Gather(b, 0, size, MPI.INT, recvB, 0, size, MPI.INT, 0);
         if (rank == 0) {
-            System.out.println("Matrix A: ");
-            printMattrix(recvbufA, size);
-            System.out.println("Matrix B: ");
-            printMattrix(recvbufB, size);
+            printMattrix("Matrix A: ", recvA, size);
+            printMattrix("Matrix B: ", recvB, size);
         }
 
-        //Ð˜Ð½Ð´ÐµÐºÑ ÑÑ‚Ñ€Ð¾ÐºÐ¸ Ð¼Ð°Ñ‚Ñ€Ð¸Ñ†Ñ‹ B, ÐºÐ¾Ñ‚Ð¾Ñ€Ð°Ñ Ð² Ð´Ð°Ð½Ð½Ñ‹Ð¹ Ð¼Ð¾Ð¼ÐµÐ½Ñ‚ Ð½Ð°Ñ…Ð¾Ð´Ð¸Ñ‚ÑÑ Ð² Ð¼Ð°ÑÑÐ¸Ð²Ðµ b
+        int globalMax = getMax(size, a, b);
+        cartComm.Sendrecv_replace(b, 0, size, MPI.INT, sourceDest.rank_dest, 0, sourceDest.rank_source, 0);
+
+//        int globalMax = 0;
         int index = rank;
-
-        int localMax = 0;
-        for (int k = 0; k < size; k++) {
-            if (localMax < (b[k] + a[k])) localMax = (b[k] + a[k]);
-        }
-        cart_comm.Sendrecv_replace(b, 0, size, MPI.INT, source_dest.rank_dest, 0, source_dest.rank_source, 0);
-
-        int globalMin = localMax;
         for (int i = 0; i < size; i++) {
             if (++index == size)
                 index = 0;
-            int max = 0;
-            for (int j = 0; j < size; j++) {
-                if (max < (b[j] + a[j])) max = (b[j] + a[j]);
-            }
-            if (globalMin > max) globalMin = max;
-            cart_comm.Sendrecv_replace(b, 0, size, MPI.INT, source_dest.rank_dest, 0, source_dest.rank_source, 0);
-
+            int max = getMax(size, a, b);
+            if (globalMax < max) globalMax = max;
+            cartComm.Sendrecv_replace(b, 0, size, MPI.INT, sourceDest.rank_dest, 0, sourceDest.rank_source, 0);
         }
 
-        int[] minbuf = {globalMin};
+        int[] maxBuf = {globalMax};
 
-        cart_comm.Gather(minbuf, 0, 1, MPI.INT, recvbufA, 0, 1, MPI.INT, 0);
+        cartComm.Gather(maxBuf, 0, 1, MPI.INT, recvA, 0, 1, MPI.INT, 0);
         if (rank == 0) {
-
-            System.out.print(" \n");
-            for (int i = 0; i < size; i++) {
-                System.out.printf("%4d\n", recvbufA[i]);
-            }
+            printColumn("Result: \n", size, recvA);
         }
 
         MPI.Finalize();
     }
 
-    static void printMattrix(int[] matrix, int length) {
+    private static int getMax(int size, int[] a, int[] b) {
+        int max = 0;
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                int mult = a[i] * b[j];
+                if (max < mult) max = mult;
+            }
+        }
+        return max;
+    }
+
+    private static void printColumn(String prefix, int size, int[] col) {
+        System.out.println(prefix);
+        for (int i = 0; i < size; i++) {
+            System.out.printf("%4d\n", col[i]);
+        }
+    }
+
+    private static void printRow(String prefix, int[] row) {
+        System.out.println(format("%s\n %s", prefix, Arrays.toString(row)));
+    }
+
+
+    static void printMattrix(String prefix, int[] matrix, int length) {
+        System.out.println(prefix);
         for (int i = 0; i < length; i++) {
             for (int j = 0; j < length; j++) {
-                System.out.format("%4d", matrix[length * i + j]);
+                System.out.format("%4d", matrix[length * j + i]);
             }
             System.out.println();
         }
+    }
+
+    private static boolean[] initBoolArray() {
+        boolean[] arr = new boolean[Task5.NUMBER];
+        for (int i = 0; i < Task5.NUMBER; i++) {
+            arr[i] = true;
+        }
+
+        return arr;
+    }
+
+    private static int[] initRandArray(int size) {
+        int[] arr = new int[size];
+        for (int i = 0; i < size; i++) {
+            arr[i] = random.nextInt(NUMBER);
+        }
+
+        return arr;
     }
 }
